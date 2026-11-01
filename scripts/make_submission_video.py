@@ -371,7 +371,7 @@ def main():
     wr = cv2.VideoWriter(str(tmp), cv2.VideoWriter_fourcc(*"mp4v"), FPS, (W, H))
     frames = []
     frames += card([("Physical AI 応用1 最終課題", 34, False),
-                    ("自然言語指示によるロボットアームのゼロショット操作", 44, True),
+                    ("GPT API への自然言語指示による実機ロボットアームの操作", 42, True),
                     ("使用 AI: OpenAI GPT-6 Astra（VLM エージェント、Responses API）", 30, True),
                     ("実機: SO-ARM101 + 俯瞰カメラ + 手首カメラ。VLM が画像を見て 1 手ずつ事前定義コマンドを選ぶ computer use 方式", 24, False),
                     ("映り込み対策: 俯瞰映像の作業領域外を黒塗りしています（VLM への入力は無加工）", 24, False)], 8,
