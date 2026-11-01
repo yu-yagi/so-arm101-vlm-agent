@@ -1,0 +1,14 @@
+# Python 3.10–3.12 を推奨（LeRobot が 3.14 未対応のため）
+# 例: uv venv --python 3.12 .venv && source .venv/bin/activate && uv pip install -r requirements.txt
+lerobot[feetech] @ git+https://github.com/huggingface/lerobot.git
+openai>=1.50
+opencv-python>=4.9
+numpy>=1.26
+scipy>=1.11
+pyyaml>=6.0
+python-dotenv>=1.0
+# 物体検出（OWLv2, GPU 推奨）と提出動画の生成
+torch>=2.4
+transformers>=4.45
+pillow>=10.0
+imageio-ffmpeg>=0.5     # ffmpeg 同梱（H.264 変換用）

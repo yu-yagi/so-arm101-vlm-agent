@@ -1,0 +1,91 @@
+# ---------------- ロボット ----------------
+robot:
+  backend: lerobot          # lerobot | mock
+  port: /dev/serial/by-id/usb-1a86_USB_Single_Serial_5B7B009812-if00  # ボード固有の安定パス（= /dev/ttyACM0）
+  id: so101_follower        # LeRobot のキャリブレーション ID
+  use_degrees: true
+  max_relative_target:      # 1 コマンドあたりの最大移動量（安全弁）。腕は deg、グリッパは 0〜100 スケール
+    shoulder_pan: 15
+    shoulder_lift: 15
+    elbow_flex: 15
+    wrist_flex: 15
+    wrist_roll: 25
+    gripper: 60
+  move_hz: 30
+  default_move_sec: 1.5
+  gripper_open: 90.0        # LeRobot の 0〜100 正規化値。広く開いて位置誤差への余裕を取る（2026-11-01 変更）
+  gripper_close: 5.0
+  home_pose:                # [deg] 2026-11-01 実機の休止姿勢を採用（アームが台座上に畳まれた安全姿勢）
+    shoulder_pan: -4.0
+    shoulder_lift: -102.9
+    elbow_flex: 96.1
+    wrist_flex: 65.0
+    wrist_roll: 41.2
+
+# ---------------- 逆運動学 ----------------
+ik:
+  grid_file: calib/grid_points.json   # scripts/teach_pixels.py の教示結果（画素 → 関節角）
+  fk_file: calib/fk_fit.json          # scripts/fit_fk.py（平面 FK のオフセット）。robot/fk.py が calib/ から読む
+  levels:                   # calib/fk_fit.json（教示 9 点からフィットした順運動学）がある場合の高さ [m]（机面から先端まで）
+    hover: 0.06             # 物の少し上。俯角一定で解き、手首カメラの見え方を揃える（粗い水平移動は carry 高さで行う）
+    carry: 0.18             # 運搬・容器の上。コップ（約 10cm）を余裕で跨ぐ。全教示点で到達可能（FK）
+  use_taught_up: true       # FK が無い場合の旧方式: grid_points.json の up（down + hover_delta）を使う
+  hover_delta:              # 合成ホバー: down 姿勢に加える角度 [deg]
+    shoulder_lift: -20
+  container_delta:          # 高い姿勢（運搬・容器を跨ぐ）: down 姿勢に加える角度 [deg]
+    shoulder_lift: -35
+    wrist_flex: 5           # 手首カメラの見え方を hover と揃える補正（2026-11-01 実測: 0〜+10 の間で最小ずれ）
+# ---------------- カメラ・作業面 ----------------
+camera:
+  backend: opencv           # opencv | mock
+  # 俯瞰（VLM 入力・校正用）: EMEET SmartCam C960 (/dev/video2)。手首: Innomaker U20CAM (/dev/video4)
+  # もう 1 台の EMEET (/dev/video0) は未使用
+  device: /dev/v4l/by-id/usb-EMEET_EMEET_SmartCam_C960_A260401000113048-video-index0        # 俯瞰
+  wrist_device: /dev/v4l/by-id/usb-Innomaker_Innomaker-U20CAM-1080p-S1_SN0001-video-index0  # 手首（グリッパに固定）
+  width: 1280
+  height: 720
+  mock_image: calib/sample_scene.jpg
+  # 録画・プレビューの俯瞰画像で黒塗りにするセル（vlm.grid_cols/rows の格子、"J5" 形式）。VLM 入力・検出には適用しない（生画像）
+  blur_cells: [A1, A2, A3, B1, B2, B3, C1, C2, C3, D1, E1, F1, G1, H1, H2, H3, I1, I2, I3, I4, I5, I6, I7, J1, J2, J3, J4, J5, J6, J7]
+workspace:
+  homography_file: calib/homography.npy   # 画素 → 作業座標。teach_pixels.py 方式では単位行列（作業座標 = 画素）
+  units: px                               # px | m
+# ---------------- VLM ----------------
+vlm:
+  model: gpt-6-astra         # エージェントに使うモデル。gpt-6-* は Responses API（api: auto で自動判定）
+  api: auto                  # auto | responses | chat
+  reasoning_effort: low      # Responses API 用（low/medium/high）。1 手ごとの応答なので low
+  image_detail: high
+  grid_cols: 10
+  grid_rows: 7
+  temperature: 0.0          # chat completions 用
+
+grasp:
+  max_roll_delta: 100       # 教示ロールからの最大変更量 [deg]（ケーブル保護）
+  tool_point: [775, 380]    # 手首画像上で「降りたとき指が閉じる位置」[px]（scripts/calibrate_wrist.py で計測）
+  servo_jacobian: calib/wrist_jacobian.json   # 俯瞰画素の移動 → 手首画像の移動（同スクリプトで計測）
+
+detector:                   # OWLv2（把持後に「元の位置から物が消えたか」の確認と、scripts/calibrate_wrist.py の物体検出に使用）
+  enabled: true
+  model: google/owlv2-base-patch16-ensemble
+  device: cuda
+  roi_margin: 150           # 検出 ROI の余白 [px]（背の高い物が切れないよう広め）
+  fence_margin: 150         # 目標点を許す範囲 = 教示範囲 + この余白 [px]（外側は極座標 IK モデルで解く。到達不可なら拒否）
+  fence_margin_bottom: 80   # 画像下側（台座から遠い側）の余白。腕が伸び切って人側へ出るので狭く
+
+agent:                      # VLM エージェント
+  max_steps: 30           # 1 試行の VLM 呼び出し上限（RoboCurve の Astra 評価は 20 回）
+  step_small_px: 12
+  step_large_px: 25       # hover 高さでの横移動は最大 2cm 程度に抑える（近くの背の高い物に当てない）
+  on_top_z: 0.012         # 接触高さがこれ以上 [m] なら「固定指が物体の上に乗った」とみなす
+  grasp_side_px: 14       # そのとき横にずらす量 [俯瞰px]（約 1.2cm）
+  servo_max_step_px: 30   # 色追跡による位置合わせの 1 回あたり最大修正量 [俯瞰px]（腕が流れないように）
+  grasp_search_step_img_px: 40   # 接触高さに基づく 1 次元探索で物体の画像位置をずらす量 [手首px]（約 1cm）
+  grasp_max_tries: 6
+  contact_torque_pct: 25  # 降下中の Torque_Limit [%]（陶器など壊れ物に当たっても小さな力しか出さない）
+  contact_extra_deg: 1.5  # 机面より余計に押し込む量 [deg]
+  contact_backoff_deg: 3  # 接触検知後に即座に戻す量 [deg]
+
+run:
+  out_dir: runs
+  record: true              # 実行中の俯瞰・手首映像とステップを runs/<run>/video_*.mp4 に録画

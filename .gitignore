@@ -1,0 +1,16 @@
+# 秘密情報
+.env
+# 環境
+.venv/
+__pycache__/
+*.pyc
+# 実行ログ（画像・JSON・録画）と生成物: 画像・動画はリポジトリに含めない
+runs/
+outputs/
+*.jpg
+*.jpeg
+*.png
+*.mp4
+*.tar.gz
+calib/*.bak
+calib/*.old.json
